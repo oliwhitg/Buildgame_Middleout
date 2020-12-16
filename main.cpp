@@ -5,7 +5,7 @@
 #include <string>
 #include <sstream>
 #include <chrono>
-
+#include <vector>
 #include <sys/stat.h>
 
 using namespace std;
@@ -137,6 +137,25 @@ int energynode(Vector2i v) {
             Vector2i neighbourpos = putin(v+d);
             if (!cell(neighbourpos).isConnect(-d)) {
                 ev +=1;
+            }
+        }
+    }
+    return ev;
+}
+
+int energynode_display(Vector2i v, vector<int> display){
+    int ev = 0;
+    for(auto d:DIR) {
+        if (cell(v).isConnect(d)) {
+            Vector2i neighbourpos = putin(v+d);
+            int ref = neighbourpos.y*N+neighbourpos.x;
+
+            for (int i=0;i<display.size();i++){
+                if (display[i]==ref){
+                    if (!cell(neighbourpos).isConnect(-d)) {
+                        ev +=1;
+                    }
+                }
             }
         }
     }
@@ -283,7 +302,61 @@ int energytot(){
 //       drop(v+d);
 //}
 
+vector<int> neighbours(int node, vector<int> display){
+    int nodex = int ((node) % N);
+    int nodey = (int((node - nodex) / N));
+    vector <int> next;
+    if (nodex!=N-1) next.push_back(node+1);
+    else next.push_back(node-(N-1));
 
+    if (nodex!=0) next.push_back(node-1);
+    else next.push_back(node+(N-1));
+
+    if (nodey!=N-1) next.push_back(node+N);
+    else next.push_back(nodex);
+
+    if (nodey!=0) next.push_back(node-N);
+    else next.push_back((N-1)*N+nodex);
+    for (int j=0;j<next.size();j++){
+        bool check = true;
+        for (int i=0;i<display.size();i++){
+            if (next[j]==display[i]) check = false;
+        }
+        if (check==true){
+            display.push_back(next[j]);
+        }
+    }
+    return display;
+};
+
+vector<int> scorer(Vector2i v){
+    vector<int> surround (4);
+    int count = 0;
+    for (auto d:DIR) {
+        Vector2i neighbourpos = putin(v+d);
+        if (cell(neighbourpos).isConnect(-d)) surround[count] = 1;
+        else surround[count] = 0;
+        count ++;
+    }
+    return surround;
+}
+
+int scorer_display(Vector2i v, vector<int> display){
+    int ev = 0;
+    for(auto d:DIR) {
+        Vector2i neighbourpos = putin(v+d);
+        int ref = neighbourpos.y*N+neighbourpos.x;
+
+        for (int i=0;i<display.size();i++){
+            if (display[i]==ref){
+                if (cell(neighbourpos).isConnect(-d)) {
+                    ev +=1;
+                }
+            }
+        }
+    }
+    return ev;
+}
 int main(int argc, char **argv) {
 
     ifstream inputFile("./input.inpt", ios::in);
@@ -481,11 +554,17 @@ int main(int argc, char **argv) {
         }
     }
 
+    vector<int> display;
+    vector<int> clicked;
+    display = {51};
 
+    clicked = {51};
+
+    display = neighbours(51, display);
     while (app.isOpen())
     {
         Event e{};
-        Vector2i selectednode = {0,11};
+        Vector2i selectednode;
         while (app.pollEvent(e))
         {
             if (e.type == Event::Closed) app.close();
@@ -495,6 +574,9 @@ int main(int argc, char **argv) {
                     Vector2i pos = Mouse::getPosition(app) + Vector2i(ts / 2, ts / 2) - Vector2i(offset);
                     pos /= ts;
                     if (isOut(pos)) continue;
+                    display.push_back(pos.y*N+pos.x);
+                    clicked.push_back(pos.y*N+pos.x);
+                    display = neighbours(pos.y*N+pos.x, display);
                     cell(pos).orientation++;
                     cell(pos).orientation = cell(pos).orientation%4;
                     cell(pos).rotate();
@@ -622,71 +704,335 @@ int main(int argc, char **argv) {
                     }
 
                 }
-            }
 
-            if (e.type == Event::KeyPressed){
-                if (e.key.code == sf::Keyboard::Enter){
+                else if (e.key.code == sf::Keyboard::Enter){
+                    cout << "Begin energy minimisation" << endl;
                     //begin an mc round of 1000 steps
                     float temp;
                     int step = 0;
                     int initialenergy = energytot();
-                    while (energytot()>0.5*initialenergy && step < steps){
-//                    while (energytot()>0){
+                    vector<int> toadd;
+                    vector<int> reexamine;
+                    toadd.clear();
+                    reexamine.clear();
+                    for (int i=0;i<display.size();i++){
+                        cout << i <<"/" << display.size() << endl;
+                        Vector2i node;
+                        int node_x = display[i]%N;
+                        int node_y = int((display[i]-node_x)/N);
 
-                        int mcnode = rand()%(N*N);
-                        int numberrotations = rand()%3;
+                        cout << "Initial E : " << energynode_display({node_x, node_y}, display) << endl;
+                        //is site minimised?
+                        Vector2i pos {node_x, node_y};
+                        vector<int> score = scorer(pos);
+                        int score_disp = scorer_display(pos, display);
 
-                        int x = mcnode%N;
-                        int y = int((mcnode-x)/N);
-                        Vector2i neighbour1 = putin({x+1,y});
-                        Vector2i neighbour2 = putin({x-1, y});
-                        Vector2i neighbour3 = putin({x,y+1});
-                        Vector2i neighbour4 = putin({x,y-1});
-                        bool run = true;
-                        if (energynode({x,y})!=0){
-                            run= true;
+                        if (energynode({node_x, node_y})==0 or energynode_display({node_x, node_y}, display)==0){
+                            //minimised
+                            break;
                         }
-                        else if (energynode(neighbour1)!=0 or energynode(neighbour2)!=0 or energynode(neighbour3)!=0 or energynode(neighbour4)!=0) {
-                            run=true;
-                        }
-
-//                        cout << x << "," << y << endl;
-                        if (run) {
-
-                            if (step % gap == 0) cout << "     STEP : " << step << "      " << energytot () << " / " << initialenergy << endl;
-                            step++;
-                            Vector2i pos = {x, y};
-                            int e0 = energytot();
-
-                            for (int j = 0; j < numberrotations + 1; j++) {
+                        else if ((score[0]+score[1]+score[2]+score[3])== cell(pos).dirs.size()) {
+                            //can be minimised globally
+                            //recursively minimise :
+                            for (int j = 0; j < 4; j++) {
+                                cout << "Rotation : " << j << endl;
                                 cell(pos).orientation++;
                                 cell(pos).orientation = cell(pos).orientation % 4;
                                 cell(pos).rotate();
-                            }
-
-                            int e1 = energytot();
-
-                            if (e1 > e0) {
-                                float rando = ((double) rand() / (RAND_MAX));
-                                if (e0<6&&e0>4) temp=t2;
-                                else if (e0<=4) temp=t3;
-                                else temp=t1;
-//                                cout << "RANDO : " << rando << "  vs : " << exp((e0-e1)/temp)<< endl;
-                                if (temp == 0) {
-                                    for (int j = 0; j < (3 - numberrotations); j++) {
-                                        cell(pos).orientation++;
-                                        cell(pos).rotate();
-                                    }
-                                } else if (rando > exp((e0 - e1) / temp)) {
-                                    for (int j = 0; j < (3 - numberrotations); j++) {
-                                        cell(pos).orientation++;
-                                        cell(pos).rotate();
-                                    }
-
+                                if (energynode({node_x, node_y}) == 0){
+                                    toadd.push_back(node_y*N+node_x);
+                                    break;
                                 }
                             }
                         }
+                        else if (score_disp==cell(pos).dirs.size()){
+                            //can be minimised locally
+                            //recursively minimise
+                            for (int j = 0; j < 4; j++) {
+                                cout << "Rotation : " << j << endl;
+                                cell(pos).orientation++;
+                                cell(pos).orientation = cell(pos).orientation % 4;
+                                cell(pos).rotate();
+                                if (energynode_display({node_x, node_y}, display) == 0){
+                                    toadd.push_back(node_y*N+node_x);
+                                    break;
+                                }
+                            }
+                        }
+
+
+
+                        else if (energynode({node_x, node_y})!=0){
+                            //yes globally
+                            Vector2i pos = {node_x, node_y};
+                            vector<int> score = scorer(pos);
+                            if ((score[0]+score[1]+score[2]+score[3]) >= cell(pos).dirs.size()){
+                                for (int j = 0; j < 4; j++) {
+                                    cout << "Rotation : " << j << endl;
+                                    cell(pos).orientation++;
+                                    cell(pos).orientation = cell(pos).orientation % 4;
+                                    cell(pos).rotate();
+                                    if (energynode({node_x, node_y}) == 0){
+                                        toadd.push_back(node_y*N+node_x);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if (energynode_display({node_x, node_y}, display)!=0){
+;
+
+
+                            //else make a next best guess:
+                            else if (scorer_display(pos, display) >= cell(pos).dirs.size()){
+
+                            }
+
+//////////////////////////////////
+
+
+
+
+//                            for (int j = 0; j < 4; j++) {
+//                                cout << "Rotation : " << j << endl;
+//                                cell(pos).orientation++;
+//                                cell(pos).orientation = cell(pos).orientation % 4;
+//                                cell(pos).rotate();
+//                                if (energynode_display({node_x, node_y}, display)==0) break;
+//                            }
+//                            if (energynode_display({node_x, node_y}, display)!=0){
+//                                reexamine.push_back(node_y*N+node_x);
+//                            }
+                            ////////////////////////////////////////////////////////////////////
+                            app.clear();
+                            int x;
+                            int y;
+                            //add some coloured lables to coms to represent clicked ones
+                            for (int j=0;j<clicked.size();j++) {
+                                if (j == 0) {
+                                    int i = clicked[j];
+                                    x = ((i) % N);
+                                    y = (int((i - x) / N));
+                                    sf::CircleShape centerofmass(20);
+                                    centerofmass.setFillColor(sf::Color::Magenta);
+                                    centerofmass.setPosition((x + 1) * ts - 7, (y + 1) * ts - 20);
+                                    app.draw(centerofmass);
+                                }
+                                else {
+                                    int i = clicked[j];
+                                    x = ((i) % N);
+                                    y = (int((i - x) / N));
+                                    sf::CircleShape centerofmass(20);
+                                    centerofmass.setFillColor(sf::Color::Blue);
+                                    centerofmass.setPosition((x + 1) * ts - 7, (y + 1) * ts - 20);
+                                    app.draw(centerofmass);
+                                }
+                            }
+                            //display everything in 'display'
+                            for (int j=0;j<display.size();j++){
+                                int i=display[j];
+
+                                x = ((i) % N);
+                                y = (int((i - x) / N));
+
+                                pipe &p = grid[x][y];
+
+                                p.angle += 5;
+                                if (p.angle > p.orientation * 90) p.angle = p.orientation * 90;
+
+                                int dummy = p.dirs.size();
+
+                                std::string s = "";
+                                for (auto d:DIR) s += p.isConnect(d) ? '1' : '0';
+                                    if (energynode({x, y}) == 0) {
+                                        //                cout << "line 523" << endl;
+
+                                        if (dummy == 2) {
+                                            if (s == "1010" or s == "0101") sPipe.setTextureRect(IntRect(0, 0, ts, ts));
+                                            else sPipe.setTextureRect(IntRect(2 * ts, 0, ts, ts));
+                                        } else if (dummy == 3) sPipe.setTextureRect(IntRect(3 * ts, 0, ts, ts));
+                                        else if (dummy == 4) sPipe.setTextureRect(IntRect(ts, 0, ts, ts));
+                                        //                cout << "line 531" << endl;
+
+                                        sPipe.setRotation(p.angle);
+                                        sPipe.setPosition(x * ts, y * ts);
+                                        sPipe.move(offset);
+                                        //                cout << "line 536" << endl;
+                                        app.draw(sPipe);
+                                    } else {
+                                        if (dummy == 2) {
+                                            if (s == "1010" or s == "0101") sUnpipe.setTextureRect(IntRect(0, 0, ts, ts));
+                                            else sUnpipe.setTextureRect(IntRect(2 * ts, 0, ts, ts));
+                                        } else if (dummy == 3) sUnpipe.setTextureRect(IntRect(3 * ts, 0, ts, ts));
+                                        else if (dummy == 4) sUnpipe.setTextureRect(IntRect(ts, 0, ts, ts));
+
+                                        sUnpipe.setRotation(p.angle);
+                                        sUnpipe.setPosition(x * ts, y * ts);
+                                        sUnpipe.move(offset);
+                                        app.draw(sUnpipe);
+                                    }
+
+
+                            }
+                            app.display();
+                            ////////////////////////////////////////////////////////////////////
+                        }
                     }
+//                    for (int i=0;i<reexamine.size();i++){
+//                        cout << i <<"/" << display.size() << endl;
+//                        Vector2i node;
+//                        int node_x = display[i]%N;
+//                        int node_y = int((display[i]-node_x)/N);
+//
+//                        toadd.push_back(node_y*N+node_x);
+//                        cout << "Initial E : " << energynode_display({node_x, node_y}, display) << endl;
+//                        while (energynode_display({node_x, node_y}, display)!=0) {
+//                            Vector2i pos = {node_x, node_y};
+//                            for (int j = 0; j < 5; j++) {
+//                                cell(pos).orientation++;
+//                                cell(pos).orientation = cell(pos).orientation % 4;
+//                                cell(pos).rotate();
+//                                if (energynode_display({node_x, node_y}, display) == 0) break;
+//                            }
+//                            if (energynode_display({node_x, node_y}, display) != 0) {
+//                                cout << "FUCK" << endl;
+//                            }
+//                            ////////////////////////////////////////////////////////////////////
+//                            app.clear();
+//                            int x;
+//                            int y;
+//                            for (int j = 0; j < clicked.size(); j++) {
+//                                if (j == 0) {
+//                                    int i = clicked[j];
+//                                    x = ((i) % N);
+//                                    y = (int((i - x) / N));
+//                                    sf::CircleShape centerofmass(20);
+//                                    centerofmass.setFillColor(sf::Color::Magenta);
+//                                    centerofmass.setPosition((x + 1) * ts - 7, (y + 1) * ts - 20);
+//                                    app.draw(centerofmass);
+//                                } else {
+//                                    int i = clicked[j];
+//                                    x = ((i) % N);
+//                                    y = (int((i - x) / N));
+//                                    sf::CircleShape centerofmass(20);
+//                                    centerofmass.setFillColor(sf::Color::Blue);
+//                                    centerofmass.setPosition((x + 1) * ts - 7, (y + 1) * ts - 20);
+//                                    app.draw(centerofmass);
+//                                }
+//                            }
+//                            for (int j = 0; j < display.size(); j++) {
+//                                int i = display[j];
+//
+//                                x = ((i) % N);
+//                                y = (int((i - x) / N));
+//
+//                                pipe &p = grid[x][y];
+//
+//                                p.angle += 5;
+//                                if (p.angle > p.orientation * 90) p.angle = p.orientation * 90;
+//
+//                                int dummy = p.dirs.size();
+//
+//                                std::string s = "";
+//                                for (auto d:DIR) s += p.isConnect(d) ? '1' : '0';
+//                                if (energynode({x, y}) == 0) {
+//                                    //                cout << "line 523" << endl;
+//
+//                                    if (dummy == 2) {
+//                                        if (s == "1010" or s == "0101") sPipe.setTextureRect(IntRect(0, 0, ts, ts));
+//                                        else sPipe.setTextureRect(IntRect(2 * ts, 0, ts, ts));
+//                                    } else if (dummy == 3) sPipe.setTextureRect(IntRect(3 * ts, 0, ts, ts));
+//                                    else if (dummy == 4) sPipe.setTextureRect(IntRect(ts, 0, ts, ts));
+//                                    //                cout << "line 531" << endl;
+//
+//                                    sPipe.setRotation(p.angle);
+//                                    sPipe.setPosition(x * ts, y * ts);
+//                                    sPipe.move(offset);
+//                                    //                cout << "line 536" << endl;
+//                                    app.draw(sPipe);
+//                                } else {
+//                                    if (dummy == 2) {
+//                                        if (s == "1010" or s == "0101") sUnpipe.setTextureRect(IntRect(0, 0, ts, ts));
+//                                        else sUnpipe.setTextureRect(IntRect(2 * ts, 0, ts, ts));
+//                                    } else if (dummy == 3) sUnpipe.setTextureRect(IntRect(3 * ts, 0, ts, ts));
+//                                    else if (dummy == 4) sUnpipe.setTextureRect(IntRect(ts, 0, ts, ts));
+//
+//                                    sUnpipe.setRotation(p.angle);
+//                                    sUnpipe.setPosition(x * ts, y * ts);
+//                                    sUnpipe.move(offset);
+//                                    app.draw(sUnpipe);
+//                                }
+//
+//
+//                            }
+//                            app.display();
+//                            ////////////////////////////////////////////////////////////////////
+//                        }
+//                    }
+                    for (int i=0;i<toadd.size();i++){
+                        clicked.push_back(toadd[i]);
+                        display.push_back(toadd[i]);
+                        display = neighbours(toadd[i], display);
+                    }
+                    cout << "Energy : " << energytot() << endl;
+
+//                    while (energytot()>0.5*initialenergy && step < steps){
+////                    while (energytot()>0){
+//
+//                        int mcnode = rand()%(N*N);
+//                        int numberrotations = rand()%3;
+//
+//                        int x = mcnode%N;
+//                        int y = int((mcnode-x)/N);
+//                        Vector2i neighbour1 = putin({x+1,y});
+//                        Vector2i neighbour2 = putin({x-1, y});
+//                        Vector2i neighbour3 = putin({x,y+1});
+//                        Vector2i neighbour4 = putin({x,y-1});
+//                        bool run = true;
+//                        if (energynode({x,y})!=0){
+//                            run= true;
+//                        }
+//                        else if (energynode(neighbour1)!=0 or energynode(neighbour2)!=0 or energynode(neighbour3)!=0 or energynode(neighbour4)!=0) {
+//                            run=true;
+//                        }
+//
+////                        cout << x << "," << y << endl;
+//                        if (run) {
+//
+//                            if (step % gap == 0) cout << "     STEP : " << step << "      " << energytot () << " / " << initialenergy << endl;
+//                            step++;
+//                            Vector2i pos = {x, y};
+//                            int e0 = energytot();
+//
+//                            for (int j = 0; j < numberrotations + 1; j++) {
+//                                cell(pos).orientation++;
+//                                cell(pos).orientation = cell(pos).orientation % 4;
+//                                cell(pos).rotate();
+//                            }
+//
+//                            int e1 = energytot();
+//
+//                            if (e1 > e0) {
+//                                float rando = ((double) rand() / (RAND_MAX));
+//                                if (e0<6&&e0>4) temp=t2;
+//                                else if (e0<=4) temp=t3;
+//                                else temp=t1;
+////                                cout << "RANDO : " << rando << "  vs : " << exp((e0-e1)/temp)<< endl;
+//                                if (temp == 0) {
+//                                    for (int j = 0; j < (3 - numberrotations); j++) {
+//                                        cell(pos).orientation++;
+//                                        cell(pos).rotate();
+//                                    }
+//                                } else if (rando > exp((e0 - e1) / temp)) {
+//                                    for (int j = 0; j < (3 - numberrotations); j++) {
+//                                        cell(pos).orientation++;
+//                                        cell(pos).rotate();
+//                                    }
+//
+//                                }
+//                            }
+//                        }
+//                    }
 
                     int newfourcoordcount = 0;
                     int newthreecoordcount = 0;
@@ -727,24 +1073,35 @@ int main(int argc, char **argv) {
 
         int x;
         int y;
-        for (int i=0;i<N*N;i++) {
+
+
+        for (int j=0;j<clicked.size();j++) {
+            if (j == 0) {
+                int i = clicked[j];
+                x = ((i) % N);
+                y = (int((i - x) / N));
+                sf::CircleShape centerofmass(20);
+                centerofmass.setFillColor(sf::Color::Magenta);
+                centerofmass.setPosition((x + 1) * ts - 7, (y + 1) * ts - 20);
+                app.draw(centerofmass);
+            }
+            else {
+                int i = clicked[j];
+                x = ((i) % N);
+                y = (int((i - x) / N));
+                sf::CircleShape centerofmass(20);
+                centerofmass.setFillColor(sf::Color::Blue);
+                centerofmass.setPosition((x + 1) * ts - 7, (y + 1) * ts - 20);
+                app.draw(centerofmass);
+            }
+        }
+
+        for (int j=0;j<display.size();j++){
+            int i=display[j];
+
             x = ((i) % N);
             y = (int((i - x) / N));
-            //0,12
-//        for (int i=0;i<2;i++){
-//            if (i==1){
-//                x = selectednode.x;
-//                y = selectednode.y;
-//            }
-//            else {
-//                pipe &q = grid[selectednode.x][selectednode.y];
-//                x = selectednode.x + q.dirs[i].x;
-//                y = selectednode.y + q.dirs[i].y;
-//                if (x<0) x+=N;
-//                else if (x>N) x-=N;
-//                if (y<0) y+=N;
-//                else if (y>N) y-=N;
-//            }
+
             pipe &p = grid[x][y];
 
             p.angle += 5;
@@ -781,8 +1138,6 @@ int main(int argc, char **argv) {
                     sUnpipe.move(offset);
                     app.draw(sUnpipe);
                 }
-
-
         }
         app.display();
 

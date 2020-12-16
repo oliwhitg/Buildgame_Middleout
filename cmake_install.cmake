@@ -1,8 +1,8 @@
-# Install script for directory: /home/oli/CLionProjects/buildgame
+# Install script for directory: /home/oli/CLionProjects/buildgame_middleout
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "/home/oli/Downloads/SFML-2.5.1-Compiled")
+  set(CMAKE_INSTALL_PREFIX "/usr/local")
 endif()
 string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 
@@ -45,5 +45,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/oli/CLionProjects/buildgame/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/oli/CLionProjects/buildgame_middleout/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

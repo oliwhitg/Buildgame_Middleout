@@ -6,7 +6,7 @@
 
 #IncludeRegexTransform: 
 
-/home/oli/CLionProjects/buildgame/main.cpp
+/home/oli/CLionProjects/buildgame_middleout/main.cpp
 iostream
 -
 SFML/Graphics.hpp
@@ -20,6 +20,8 @@ string
 sstream
 -
 chrono
+-
+vector
 -
 sys/stat.h
 -
